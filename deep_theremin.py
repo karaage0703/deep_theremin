@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import tensorflow as tf
+import client
 
 from distutils.version import StrictVersion
 
@@ -136,8 +137,9 @@ if __name__ == '__main__':
                   + (output_dict['detection_boxes'][i][3] - output_dict['detection_boxes'][i][1])
 
           freq = 440 +  (distance * 10) * (distance * 10)
-          with open('freq.txt', mode='w') as f:
-            f.write(str(freq))
+          #with open('freq.txt', mode='w') as f:
+          #  f.write(str(freq))
+          client.send(freq)
 
           speed_info = '%s: %f' % ('speed=', elapsed_time)
           cv2.putText(img, speed_info, (10,50), \
