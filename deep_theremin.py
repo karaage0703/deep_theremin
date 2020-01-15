@@ -91,7 +91,7 @@ count_max = 0
 if __name__ == '__main__':
   count = 0
 
-  freq = 440
+  freq = 440/7
 
   while True:
     ret, img = cam.read()
@@ -136,7 +136,7 @@ if __name__ == '__main__':
           distance = (output_dict['detection_boxes'][i][2] - output_dict['detection_boxes'][i][0]) \
                   + (output_dict['detection_boxes'][i][3] - output_dict['detection_boxes'][i][1])
 
-          freq = 440 +  (distance * 10) * (distance * 10)
+          freq = 440/7 +  (distance * 5) * (distance * 5)
           #with open('freq.txt', mode='w') as f:
           #  f.write(str(freq))
           client.send(freq)

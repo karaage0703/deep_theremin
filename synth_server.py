@@ -5,14 +5,15 @@ import struct
 from time import sleep
 import socket
 from multiprocessing import Value, Process
+# import psonic
 
-host = "xx.xx.xx.xx" #お使いのサーバーのホスト名を入れます
-port = 8888 #クライアントと同じPORTをしてあげます
+host = "localhost" # Input ip address or host name
+port = 8888 # same as client
 
 serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-serversock.bind((host,port)) #IPとPORTを指定してバインドします
-serversock.listen(10) #接続の待ち受けをします（キューの最大数を指定）
+serversock.bind((host,port))
+serversock.listen(10)
 
 
 def play(stream,data):
@@ -61,6 +62,15 @@ def sound_out(freq):
     stream.close()
     p.terminate()
 
+def sonic_pi(freq):
+    import psonic
+    psonic.use_synth(psonic.PULSE)
+    while True:
+        with psonic.Fx(psonic.REVERB):
+            print(freq.value)
+            psonic.play(freq.value, release=0.2)
+            sleep(0.08)
+
 
 def data_communication(freq):
     print('Waiting for connections...')
@@ -79,9 +89,10 @@ def data_communication(freq):
 
 if __name__ == '__main__':
 
-    freq = Value('d', 440)
+    freq = Value('d', 70)
 
-    process1 = Process(target=sound_out, args=[freq])
+    process1 = Process(target=sonic_pi, args=[freq])
+    # process1 = Process(target=sound_out, args=[freq])
     process2 = Process(target=data_communication, args=[freq])
 
     process1.start()
