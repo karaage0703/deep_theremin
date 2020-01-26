@@ -1,4 +1,4 @@
-# coding: utf-8
+# -*- coding: utf-8 -*-
 # Deep Theremin
 import argparse
 import cv2
@@ -7,7 +7,7 @@ import os
 import sys
 import time
 import tensorflow as tf
-import client
+import serial
 import pyrealsense2 as rs
 
 from distutils.version import StrictVersion
@@ -106,9 +106,10 @@ def run_inference_for_single_image(image, graph):
 count_max = 0
 
 if __name__ == '__main__':
+  ser = serial.Serial('/dev/ttyTHS1', 115200, timeout=1)
   count = 0
 
-  freq = 440/7
+  base_freq = 50.0
 
   try:
     while True:
@@ -158,7 +159,7 @@ if __name__ == '__main__':
         for i in range(output_dict['num_detections']):
           detection_score = output_dict['detection_scores'][i]
 
-          if detection_score > 0.95:
+          if detection_score > 0.90:
             # Define bounding box
             h, w, c = img.shape
             box = output_dict['detection_boxes'][i] * np.array( \
@@ -173,14 +174,9 @@ if __name__ == '__main__':
             #         + (output_dict['detection_boxes'][i][3] - output_dict['detection_boxes'][i][1])
 
             distance = (1 / depth_image[center_pos[0], center_pos[1]]) * 1000
-            print(distance)
 
-            # freq = 440/7 +  (distance * 5) * (distance * 5)
-            freq = 440/7 +  (distance) * (distance)
-
-            #with open('freq.txt', mode='w') as f:
-            #  f.write(str(freq))
-            client.send(freq)
+            freq = base_freq + 2 * distance * distance
+            ser.write(str(freq).encode())
 
             speed_info = '%s: %f' % ('speed=', elapsed_time)
             freq_info = '%s: %f' % ('freq=', freq)
