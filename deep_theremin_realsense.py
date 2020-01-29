@@ -6,7 +6,10 @@ import numpy as np
 import os
 import sys
 import time
+import datetime
 import tensorflow as tf
+from tensorflow.keras.preprocessing.image import array_to_img, img_to_array, load_img
+from tensorflow.keras.models import model_from_json
 import serial
 import pyrealsense2 as rs
 
@@ -18,11 +21,14 @@ if StrictVersion(tf.__version__) < StrictVersion('1.12.0'):
 # Path to label and frozen detection graph. This is the actual model that is used for the object detection.
 parser = argparse.ArgumentParser(description='Deep Theremin')
 parser.add_argument('-m', '--model', default='./frozen_inference_graph.pb')
+parser.add_argument('--save_image', action='store_true')
 
 cascade_path = "./haarcascade_frontalface_alt.xml"
 
 X_SIZE = 640
 Y_SIZE = 480
+
+SAVE_TIME_INTERVAL = 1
 
 args = parser.parse_args()
 
@@ -32,8 +38,8 @@ pipeline = rs.pipeline()
 #Create a config and configure the pipeline to stream
 #  different resolutions of color and depth streams
 config = rs.config()
-config.enable_stream(rs.stream.depth, X_SIZE, Y_SIZE, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, X_SIZE, Y_SIZE, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.depth, X_SIZE, Y_SIZE, rs.format.z16, 60)
+config.enable_stream(rs.stream.color, X_SIZE, Y_SIZE, rs.format.bgr8, 60)
 
 # Start streaming
 profile = pipeline.start(config)
@@ -88,6 +94,10 @@ with detection_graph.as_default():
 
   image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
 
+print('Loading recognition model...')
+model_pred = model_from_json(open('mnist_deep_model.json').read())
+model_pred.load_weights('weights.99.hdf5')
+print('Model is loaded')
 
 def run_inference_for_single_image(image, graph):
   # Run inference
@@ -110,6 +120,10 @@ if __name__ == '__main__':
   count = 0
 
   base_freq = 50.0
+  freq = base_freq
+
+  pred_label = ''
+  save_image_timer = time.time()
 
   try:
     while True:
@@ -156,43 +170,88 @@ if __name__ == '__main__':
         output_dict = run_inference_for_single_image(image_np_expanded, detection_graph)
         elapsed_time = time.time() - start
 
+        box_size_max = 0.0
+        speed_info = '%s' % ('speed: None')
+        freq_info = '%s' % ('freq: None')
+
         for i in range(output_dict['num_detections']):
           detection_score = output_dict['detection_scores'][i]
 
-          if detection_score > 0.90:
+          if detection_score > 0.80:
             # Define bounding box
             h, w, c = img.shape
             box = output_dict['detection_boxes'][i] * np.array( \
               [h, w,  h, w])
             box = box.astype(np.int)
 
-            center_pos = [(int)(Y_SIZE * (output_dict['detection_boxes'][i][2] + output_dict['detection_boxes'][i][0]) / 2),
-                          (int)(X_SIZE * (output_dict['detection_boxes'][i][3] + output_dict['detection_boxes'][i][1]) /2)]
-            # print(center_pos)
+            box_size = box[2] - box[0] + box[3] - box[1]
+            if box_size_max < box_size:
+              box_size_max = box_size
 
-            # box_size = (output_dict['detection_boxes'][i][2] - output_dict['detection_boxes'][i][0]) \
-            #         + (output_dict['detection_boxes'][i][3] - output_dict['detection_boxes'][i][1])
+              center_pos = [(int)((box[0] + box[2]) / 2),
+                              (int)((box[1] + box[3]) / 2)]
+              distance = (1 / depth_image[center_pos[0], center_pos[1]]) * 1000
 
-            distance = (1 / depth_image[center_pos[0], center_pos[1]]) * 1000
+              freq = base_freq + 2 * distance * distance
 
-            freq = base_freq + 2 * distance * distance
-            ser.write(str(freq).encode())
+              score_info = output_dict['detection_scores'][i]
+              speed_info = '%s: %f' % ('speed=', elapsed_time)
+              freq_info = '%s: %f' % ('freq=', freq)
 
-            speed_info = '%s: %f' % ('speed=', elapsed_time)
-            freq_info = '%s: %f' % ('freq=', freq)
-            cv2.putText(img, speed_info, (10,50), \
-              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
-            cv2.putText(img, freq_info, (10,100), \
-              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+              # crop hand
+              hand_img = img[box[0]:box[2],box[1]:box[3]]
 
-            # Draw bounding box
-            cv2.rectangle(img, \
-              (box[1], box[0]), (box[3], box[2]), (0, 0, 255), 3)
+              # Prediction hand shape
+              X = []
+              hand_img = cv2.resize(hand_img, (64, 64))
 
-            # Put label near bounding box
-            information = '%s: %f' % ('hand', output_dict['detection_scores'][i])
-            cv2.putText(img, information, (box[1], box[2]), \
-              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+              # Save Image
+              if args.save_image:
+                # elapsed_time = time.time() - save_image_timer
+                if (time.time() - save_image_timer) > SAVE_TIME_INTERVAL:
+                  save_image_timer = time.time()
+                  image_file_name = datetime.datetime.today().strftime('%Y%m%d_%H%M%S') + '.jpg'
+
+                  cv2.imwrite(image_file_name, hand_img)
+
+              hand_img = img_to_array(hand_img)
+              X.append(hand_img)
+              X = np.asarray(X)
+              X = X / 255.0
+              start = time.time()
+              preds = model_pred.predict(X)
+              elapsed_time = time.time() - start
+
+              labels = ['gu', 'choki', 'pa']
+              label_num = 0
+              tmp_max_pred = 0
+              for i in preds[0]:
+                if i > tmp_max_pred:
+                  pred_label = labels[label_num]
+                  tmp_max_pred = i
+                label_num += 1
+
+              # Draw bounding box
+              cv2.rectangle(img, \
+                (box[1], box[0]), (box[3], box[2]), (0, 0, 255), 3)
+
+              # Put label near bounding box
+              # information = '%s: %f' % ('hand', output_dict['detection_scores'][i])
+              information = '%s: %f' % ('hand', detection_score)
+              cv2.putText(img, information, (box[1], box[2]), \
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+
+
+        # Put info
+        cv2.putText(img, speed_info, (10,50), \
+          cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, freq_info, (10,100), \
+          cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
+
+        print(freq)
+        # serial_txt = str(freq) + ',' + pred_label
+        # ser.write(serial_txt.encode())
+        ser.write(str(freq).encode())
 
         cv2.imshow('Deep Theremin', img)
         # cv2.imshow('Deep Theremin', image_np)
