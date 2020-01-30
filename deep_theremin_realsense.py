@@ -96,7 +96,7 @@ with detection_graph.as_default():
 
 print('Loading recognition model...')
 model_pred = model_from_json(open('mnist_deep_model.json').read())
-model_pred.load_weights('weights.99.hdf5')
+model_pred.load_weights('weights.20.hdf5')
 print('Model is loaded')
 
 def run_inference_for_single_image(image, graph):
@@ -222,7 +222,7 @@ if __name__ == '__main__':
               preds = model_pred.predict(X)
               elapsed_time = time.time() - start
 
-              labels = ['gu', 'choki', 'pa']
+              labels = ['choki', 'gu', 'pa']
               label_num = 0
               tmp_max_pred = 0
               for i in preds[0]:
@@ -248,10 +248,8 @@ if __name__ == '__main__':
         cv2.putText(img, freq_info, (10,100), \
           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
-        print(freq)
-        # serial_txt = str(freq) + ',' + pred_label
-        # ser.write(serial_txt.encode())
-        ser.write(str(freq).encode())
+        serial_txt = str(freq) + ',' + pred_label
+        ser.write(serial_txt.encode())
 
         cv2.imshow('Deep Theremin', img)
         # cv2.imshow('Deep Theremin', image_np)
