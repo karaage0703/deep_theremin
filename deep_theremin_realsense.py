@@ -199,7 +199,10 @@ if __name__ == '__main__':
               freq_info = '%s: %f' % ('freq=', freq)
 
               # crop hand
-              hand_img = img[box[0]:box[2],box[1]:box[3]]
+              padding_img = cv2.copyMakeBorder(img, int(Y_SIZE/2), int(Y_SIZE/2) , int(X_SIZE/2), int(X_SIZE/2), cv2.BORDER_CONSTANT, value=(0,0,0))
+              h_diff = int((box[2] - box[0]) / 2)
+              w_diff = int((box[3] - box[1]) / 2)
+              hand_img = padding_img[int(Y_SIZE/2) + box[0] - h_diff:int(Y_SIZE/2) + box[2] + h_diff, int(X_SIZE/2) + box[1] - w_diff:int(X_SIZE/2) + box[3] + w_diff]
 
               # Prediction hand shape
               X = []
