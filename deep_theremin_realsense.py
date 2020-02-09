@@ -96,7 +96,7 @@ with detection_graph.as_default():
 
 print('Loading recognition model...')
 model_pred = model_from_json(open('mnist_deep_model.json').read())
-model_pred.load_weights('weights.20.hdf5')
+model_pred.load_weights('weights.20_padding.hdf5')
 print('Model is loaded')
 
 def run_inference_for_single_image(image, graph):
@@ -127,6 +127,7 @@ if __name__ == '__main__':
 
   try:
     while True:
+      start = time.time()
       frames = pipeline.wait_for_frames()
       # frames.get_depth_frame() is a 640x360 depth image
 
@@ -143,7 +144,11 @@ if __name__ == '__main__':
 
       depth_image = np.asanyarray(aligned_depth_frame.get_data())
       color_image = np.asanyarray(color_frame.get_data())
-      img = color_image
+      # img = color_image
+      img_b = np.where(depth_image > 1000, 0, color_image[:, :, 0])
+      img_g = np.where(depth_image > 1000, 0, color_image[:, :, 1])
+      img_r = np.where(depth_image > 1000, 0, color_image[:, :, 2])
+      img = np.dstack((img_b, img_g, img_r))
 
       key = cv2.waitKey(1)
       if key == 27: # when ESC key is pressed break
@@ -157,18 +162,19 @@ if __name__ == '__main__':
         image_np = img_bgr[:,:,::-1]
 
         # detect face and eliminate face region of image
-        image_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        cascade = cv2.CascadeClassifier(cascade_path)
-        facerect = cascade.detectMultiScale(image_gray, scaleFactor=1.1, minNeighbors=1, minSize=(1, 1))
+        # image_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        # cascade = cv2.CascadeClassifier(cascade_path)
+        # facerect = cascade.detectMultiScale(image_gray, scaleFactor=1.1, minNeighbors=1, minSize=(1, 1))
 
-        if len(facerect) > 0:
-          for rect in facerect:
-            image_np[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]] = 0.0
+        # if len(facerect) > 0:
+        #   for rect in facerect:
+        #     image_np[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]] = 0.0
 
         image_np_expanded = np.expand_dims(image_np, axis=0)
-        start = time.time()
+
+        # start = time.time()
         output_dict = run_inference_for_single_image(image_np_expanded, detection_graph)
-        elapsed_time = time.time() - start
+        # elapsed_time = time.time() - start
 
         box_size_max = 0.0
         speed_info = '%s' % ('speed: None')
@@ -195,7 +201,6 @@ if __name__ == '__main__':
               freq = base_freq + 2 * distance * distance
 
               score_info = output_dict['detection_scores'][i]
-              speed_info = '%s: %f' % ('speed=', elapsed_time)
               freq_info = '%s: %f' % ('freq=', freq)
 
               # crop hand
@@ -210,7 +215,6 @@ if __name__ == '__main__':
 
               # Save Image
               if args.save_image:
-                # elapsed_time = time.time() - save_image_timer
                 if (time.time() - save_image_timer) > SAVE_TIME_INTERVAL:
                   save_image_timer = time.time()
                   image_file_name = datetime.datetime.today().strftime('%Y%m%d_%H%M%S') + '.jpg'
@@ -221,9 +225,9 @@ if __name__ == '__main__':
               X.append(hand_img)
               X = np.asarray(X)
               X = X / 255.0
-              start = time.time()
+              # start = time.time()
               preds = model_pred.predict(X)
-              elapsed_time = time.time() - start
+              # elapsed_time = time.time() - start
 
               labels = ['choki', 'gu', 'pa']
               label_num = 0
@@ -235,8 +239,17 @@ if __name__ == '__main__':
                 label_num += 1
 
               # Draw bounding box
+              if pred_label == 'choki':
+                box_color = (0, 0, 255)
+              elif pred_label == 'gu':
+                box_color = (0, 255, 0)
+              elif pred_label == 'pa':
+                box_color = (255, 0, 0)
+              else:
+                print('Error label')
+
               cv2.rectangle(img, \
-                (box[1], box[0]), (box[3], box[2]), (0, 0, 255), 3)
+                (box[1], box[0]), (box[3], box[2]), box_color, 3)
 
               # Put label near bounding box
               # information = '%s: %f' % ('hand', output_dict['detection_scores'][i])
@@ -244,6 +257,13 @@ if __name__ == '__main__':
               cv2.putText(img, information, (box[1], box[2]), \
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
+        # Put frequency information via serial communication
+        # print(pred_label)
+        serial_txt = str(freq) + ',' + pred_label
+        ser.write(serial_txt.encode())
+
+        elapsed_time = time.time() - start
+        speed_info = '%s: %f' % ('speed=', elapsed_time)
 
         # Put info
         cv2.putText(img, speed_info, (10,50), \
@@ -251,9 +271,7 @@ if __name__ == '__main__':
         cv2.putText(img, freq_info, (10,100), \
           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
-        serial_txt = str(freq) + ',' + pred_label
-        ser.write(serial_txt.encode())
-
+        # Display image
         cv2.imshow('Deep Theremin', img)
         # cv2.imshow('Deep Theremin', image_np)
         count = 0
