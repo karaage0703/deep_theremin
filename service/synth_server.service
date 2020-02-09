@@ -1,0 +1,8 @@
+[Unit]
+Description=synth server
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/deep_theremin/synth_server_raspi_serial.py
+Restart = no
+Type=simple
+[Install]
+WantedBy=multi-user.target
