@@ -23,7 +23,8 @@ parser = argparse.ArgumentParser(description='Deep Theremin')
 parser.add_argument('-m', '--model', default='./frozen_inference_graph.pb')
 parser.add_argument('--save_image', action='store_true')
 
-cascade_path = "./haarcascade_frontalface_alt.xml"
+cascade_path = './haarcascade_frontalface_alt.xml'
+image_dir_path = './image_dir'
 
 X_SIZE = 640
 Y_SIZE = 480
@@ -125,6 +126,9 @@ if __name__ == '__main__':
   pred_label = ''
   save_image_timer = time.time()
 
+  if args.save_image:
+    os.makedirs(image_dir_path, exist_ok=True)
+
   try:
     while True:
       start = time.time()
@@ -218,6 +222,7 @@ if __name__ == '__main__':
                 if (time.time() - save_image_timer) > SAVE_TIME_INTERVAL:
                   save_image_timer = time.time()
                   image_file_name = datetime.datetime.today().strftime('%Y%m%d_%H%M%S') + '.jpg'
+                  image_file_name = os.path.join(image_dir_path, image_file_name)
 
                   cv2.imwrite(image_file_name, hand_img)
 
